@@ -16,7 +16,7 @@ contest leaderboard.
   than configuring separate test cases in the UI.
 - Start timed contests with one hidden input/expected-output pair; submissions
   are ranked by first accepted solve time.
-- Load a Codeforces problem link and fetch its public metadata.
+- Load a Codeforces/Leetcode problem link and fetch its public metadata.
 
 ## Tech stack
 
