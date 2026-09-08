@@ -30,7 +30,7 @@ function Room() {
   const fetchCFMeta = async (contestId, index) => {
     try {
       const res = await fetch(
-        `${BACKEND_URL}/cf/meta?contestId=${contestId}&index=${index}`
+        `https://codesimul-wlx1.onrender.com/cf/meta?contestId=${contestId}&index=${index}`
       );
 
       const data = await res.json();
@@ -846,7 +846,7 @@ function Room() {
 
         const res =
           await fetch(
-            `${BACKEND_URL}/run`,
+            `https://codesimul-wlx1.onrender.com/run`,
             {
               method: "POST",
 

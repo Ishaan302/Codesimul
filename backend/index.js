@@ -42,8 +42,11 @@ const testRunLimiter = rateLimit({
   message: { error: "Too many test runs — please wait a moment and try again." },
 });
 
+const appOrigin = process.env.APP_ORIGIN;
 const allowedOrigins = process.env.NODE_ENV === "production"
-  ? ["https://your-production-domain.com"]
+  ? appOrigin
+    ? appOrigin.split(",").map((origin) => origin.trim()).filter(Boolean)
+    : []
   : ["http://localhost:3000", "http://localhost:3001"];
 
 app.use(helmet({
