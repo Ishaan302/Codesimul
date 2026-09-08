@@ -2,9 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import socket from "../socket";
-
-const BACKEND_URL =
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
+import { BACKEND_URL } from "../config/backend";
 
 const LANGUAGES = {
   cpp: { label: "C++", fileName: "main.cpp", monaco: "cpp" },
@@ -30,7 +28,7 @@ function Room() {
   const fetchCFMeta = async (contestId, index) => {
     try {
       const res = await fetch(
-        `https://codesimul-wlx1.onrender.com/cf/meta?contestId=${contestId}&index=${index}`
+        `${BACKEND_URL}/cf/meta?contestId=${contestId}&index=${index}`
       );
 
       const data = await res.json();
@@ -846,7 +844,7 @@ function Room() {
 
         const res =
           await fetch(
-            `https://codesimul-wlx1.onrender.com/run`,
+            `${BACKEND_URL}/run`,
             {
               method: "POST",
 

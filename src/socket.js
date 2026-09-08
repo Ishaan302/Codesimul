@@ -1,8 +1,7 @@
 import { io } from "socket.io-client";
+import { BACKEND_URL } from "./config/backend";
 
-const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
-
-const socket = io(SOCKET_URL, {
+const socket = io(BACKEND_URL, {
   autoConnect: false,
   transports: ['websocket', 'polling'],
   reconnection: true,
