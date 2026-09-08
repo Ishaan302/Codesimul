@@ -975,13 +975,13 @@ function Room() {
   ========================================================= */
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-[#0b0b0d] text-[#d4d4d8] flex flex-col">
+    <div className="relative flex h-screen w-full flex-col gap-[3px] overflow-hidden bg-[#09090b] p-[3px] text-[#d4d4d8]">
 
       {/* =====================================================
           HEADER
       ====================================================== */}
 
-      <header className="h-[52px] shrink-0 border-b border-[#27272a] bg-[#0b0b0d] px-5 flex items-center justify-between">
+      <header className="relative z-10 flex h-[52px] shrink-0 items-center justify-between border border-[#21262d] bg-[#0d1117] px-5">
 
         {/* LEFT SIDE */}
 
@@ -991,20 +991,20 @@ function Room() {
             Code Simul
           </span>
 
-          <span className="rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 font-mono text-[11px] text-[#8b7fe8]">
+          <span className="rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 font-mono text-[11px] text-[#00C2D7]">
             {roomId}
           </span>
 
           <span className="flex items-center text-[12px] text-[#a1a1aa]">
 
-            <span className="mr-2 h-1.5 w-1.5 rounded-full bg-[#8b7fe8]" />
+            <span className="mr-2 h-1.5 w-1.5 rounded-full bg-[#00C2D7]" />
 
             {members.length} connected
 
           </span>
 
           {contest.active && (
-            <span className="font-mono text-[11px] text-[#fbbf24]">
+            <span className="font-mono text-[11px] text-[#00C2D7]">
               CONTEST {formatCountdown(contestRemainingMs)}
             </span>
           )}
@@ -1055,7 +1055,7 @@ function Room() {
             onClick={
               handleRunCode
             }
-            className="rounded-lg bg-[#8176dc] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#7569d1]"
+            className="rounded-lg bg-[#00C2D7] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#20D9EA]"
           >
             Run code
           </button>
@@ -1063,7 +1063,7 @@ function Room() {
           <button
             onClick={handleStartContest}
             disabled={contest.active}
-            className="rounded-lg border border-[#f59e0b] px-4 py-2 text-[12px] font-semibold text-[#fbbf24] hover:bg-[#2a2112] disabled:opacity-50"
+            className="rounded-lg border border-[#00C2D7] px-4 py-2 text-[12px] font-semibold text-[#00C2D7] hover:bg-[#082B30] disabled:opacity-50"
           >
             {contest.active ? "Contest active" : "Start contest"}
           </button>
@@ -1077,7 +1077,7 @@ function Room() {
       ====================================================== */}
 
       <main
-        className="min-w-0 min-h-0 flex-1 grid"
+        className="relative z-10 grid min-h-0 min-w-0 flex-1 gap-[3px]"
         style={{
           gridTemplateColumns: `${leftWidth}px 6px minmax(0,1fr) 6px ${rightWidth}px`,
         }}
@@ -1087,7 +1087,7 @@ function Room() {
             LEFT PROBLEM PANEL
         ==================================================== */}
 
-        <aside className="min-w-0 min-h-0 overflow-y-auto overflow-x-hidden bg-[#0d0d0f] px-[14px] pt-[18px]">
+        <aside className="min-w-0 min-h-0 overflow-y-auto overflow-x-hidden border border-[#161b22] bg-[#0d0d0f] px-[14px] pt-[18px]">
 
           <p className="mb-[10px] text-[11px] font-medium tracking-wide text-[#71717a]">
             PROBLEM
@@ -1134,7 +1134,7 @@ function Room() {
                     </div>
                   )}
 
-                <p className="mt-3 text-[11px] font-medium text-[#f97316]">
+                <p className="mt-3 text-[11px] font-medium text-[#00C2D7]">
                   Rating{" "}
                   {
                     problemData.rating ||
@@ -1165,14 +1165,14 @@ function Room() {
                     )
                   }
                   placeholder="Paste problem link"
-                  className="mt-3 w-full rounded-md border border-[#27272a] bg-[#111113] px-2.5 py-2 text-[11px] text-[#d4d4d8] outline-none placeholder:text-[#52525b] focus:border-[#8176dc]"
+                  className="mt-3 w-full rounded-md border border-[#27272a] bg-[#111113] px-2.5 py-2 text-[11px] text-[#d4d4d8] outline-none placeholder:text-[#52525b] focus:border-[#00C2D7]"
                 />
 
                 <button
                   onClick={
                     handleLoadProblem
                   }
-                  className="mt-2 text-[11px] text-[#8b7fe8] hover:text-[#a49bea]"
+                  className="mt-2 text-[11px] text-[#00C2D7] hover:text-[#20D9EA]"
                 >
                   Load problem ↗
                 </button>
@@ -1243,7 +1243,7 @@ function Room() {
         ==================================================== */}
 
         <div
-          className="w-[6px] bg-[#27272a] hover:bg-[#8176dc] cursor-col-resize transition-colors"
+          className="w-[6px] bg-[#27272a] hover:bg-[#00C2D7] cursor-col-resize transition-colors"
           onMouseDown={(e) => {
 
             e.preventDefault();
@@ -1325,7 +1325,7 @@ function Room() {
         ==================================================== */}
 
         <section
-          className="min-w-0 min-h-0 grid overflow-hidden bg-[#0d0d0f]"
+          className="min-w-0 min-h-0 grid gap-[3px] overflow-hidden border border-[#161b22] bg-transparent"
           style={{
             gridTemplateRows: `minmax(0, ${topRightHeight}fr) 6px minmax(0, ${100 -
               topRightHeight
@@ -1337,7 +1337,7 @@ function Room() {
               CODE EDITOR
           ================================================== */}
 
-          <div className="min-w-0 min-h-0 flex flex-col overflow-hidden bg-[#20203c]">
+          <div className="min-w-0 min-h-0 flex flex-col overflow-hidden bg-[#13131e]">
 
             {/* TAB */}
 
@@ -1350,7 +1350,7 @@ function Room() {
               <select
                 value={language}
                 onChange={(event) => handleLanguageChange(event.target.value)}
-                className="mb-2 rounded border border-[#30303a] bg-[#15151a] px-2 py-1 font-mono text-[11px] text-[#d4d4d8] outline-none focus:border-[#8176dc]"
+                className="mb-2 rounded border border-[#30303a] bg-[#15151a] px-2 py-1 font-mono text-[11px] text-[#d4d4d8] outline-none focus:border-[#00C2D7]"
                 aria-label="Programming language"
               >
                 {Object.entries(LANGUAGES).map(([value, config]) => (
@@ -1431,25 +1431,25 @@ function Room() {
 
                       colors: {
                         "editor.background":
-                          "#0a1128",
+                          "#111113",
                         "editor.foreground":
                           "#c9d1d9",
                         "editorLineNumber.foreground":
-                          "#3a5a8c",
+                          "#52525b",
                         "editorLineNumber.activeForeground":
-                          "#79c0ff",
+                          "#00C2D7",
                         "editor.selectionBackground":
-                          "#1c3a6e",
+                          "#08343A",
                         "editor.lineHighlightBackground":
-                          "#0f1a3d",
+                          "#171719",
                         "editorCursor.foreground":
-                          "#58a6ff",
+                          "#00C2D7",
                         "editorGutter.background":
-                          "#0a1128",
+                          "#111113",
                         "editorWidget.background":
-                          "#0d1836",
+                          "#171719",
                         "editorWidget.border":
-                          "#1c2f5c",
+                          "#27272a",
                       },
                     }
                   );
@@ -1514,7 +1514,7 @@ function Room() {
           ================================================== */}
 
           <div
-            className="h-[6px] bg-[#27272a] hover:bg-[#8176dc] cursor-row-resize transition-colors"
+            className="h-[6px] bg-[#27272a] hover:bg-[#00C2D7] cursor-row-resize transition-colors"
             onMouseDown={(e) => {
 
               e.preventDefault();
@@ -1606,7 +1606,7 @@ function Room() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="stdin"
-                  className="m-4 min-h-0 flex-1 resize-none rounded-md border border-[#27272a] bg-[#09090b] p-3 font-mono text-[12px] text-[#d4d4d8] outline-none focus:border-[#8176dc]"
+                  className="m-4 min-h-0 flex-1 resize-none rounded-md border border-[#27272a] bg-[#09090b] p-3 font-mono text-[12px] text-[#d4d4d8] outline-none focus:border-[#00C2D7]"
                 />
               </div>
               <div className="flex min-w-0 min-h-0 flex-col">
@@ -1626,7 +1626,7 @@ function Room() {
         ==================================================== */}
 
         <div
-          className="w-[6px] bg-[#27272a] hover:bg-[#8176dc] cursor-col-resize transition-colors"
+          className="w-[6px] bg-[#27272a] hover:bg-[#00C2D7] cursor-col-resize transition-colors"
           onMouseDown={(e) => {
 
             e.preventDefault();
@@ -1707,7 +1707,7 @@ function Room() {
             WHITEBOARD
         ==================================================== */}
 
-        <aside className="min-w-0 min-h-0 overflow-hidden bg-[#0d0d0f] px-[18px] pt-[18px] flex flex-col">
+        <aside className="flex min-w-0 min-h-0 flex-col overflow-hidden border border-[#161b22] bg-[#0d0d0f] px-[18px] pt-[18px]">
 
           {/* HEADER */}
 
@@ -1743,7 +1743,7 @@ function Room() {
               ) : contestLeaderboard.map((submission, index) => (
                 <div key={submission.socketId} className="flex justify-between font-mono text-[11px] text-[#d4d4d8]">
                   <span>{index + 1}. {submission.username}</span>
-                  <span className="text-[#a78bfa]">{Math.max(0, Math.round((submission.timestamp - contest.startTime) / 1000))}s</span>
+                  <span className="text-[#00C2D7]">{Math.max(0, Math.round((submission.timestamp - contest.startTime) / 1000))}s</span>
                 </div>
               ))}
             </div>
@@ -1796,7 +1796,7 @@ function Room() {
                 title="Black"
                 className={`h-5 w-5 rounded-sm bg-black border-2 ${strokeColor ===
                     "black"
-                    ? "border-[#8176dc] ring-1 ring-[#8176dc]"
+                    ? "border-[#00C2D7] ring-1 ring-[#00C2D7]"
                     : "border-[#52525b]"
                   }`}
               />
@@ -1812,7 +1812,7 @@ function Room() {
                 title="Red"
                 className={`h-5 w-5 rounded-sm bg-red-500 border-2 ${strokeColor ===
                     "red"
-                    ? "border-[#8176dc] ring-1 ring-[#8176dc]"
+                    ? "border-[#00C2D7] ring-1 ring-[#00C2D7]"
                     : "border-[#52525b]"
                   }`}
               />
@@ -1828,7 +1828,7 @@ function Room() {
                 title="Blue"
                 className={`h-5 w-5 rounded-sm bg-blue-500 border-2 ${strokeColor ===
                     "blue"
-                    ? "border-[#8176dc] ring-1 ring-[#8176dc]"
+                    ? "border-[#00C2D7] ring-1 ring-[#00C2D7]"
                     : "border-[#52525b]"
                   }`}
               />
@@ -1844,7 +1844,7 @@ function Room() {
                 title="Green"
                 className={`h-5 w-5 rounded-sm bg-green-500 border-2 ${strokeColor ===
                     "green"
-                    ? "border-[#8176dc] ring-1 ring-[#8176dc]"
+                    ? "border-[#00C2D7] ring-1 ring-[#00C2D7]"
                     : "border-[#52525b]"
                   }`}
               />
