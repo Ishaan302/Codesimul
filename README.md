@@ -34,21 +34,24 @@ Vercel React frontend (Monaco Editor)
   v
 Render Node.js + Express + Socket.IO backend
   |
-  | Docker CLI (when an execution environment is available)
+  | Authenticated HTTPS request
   v
-Code execution environment
-  `- codesimul-runner:latest Docker sandbox
+Dedicated executor service
+  |
+  | Local Docker CLI
+  v
+codesimul-runner:latest Docker sandbox
 ```
 
-The Docker sandbox is separate from the normal frontend-to-backend connection. A live Render web service proves that the HTTP and Socket.IO backend is reachable; it does not by itself prove that the service can launch Docker containers.
+The executor is separate from the normal frontend-to-backend connection. The Render backend owns the public API, Socket.IO rooms, contest state, and hidden contest data; it sends execution work to the executor with a private bearer token.
 
 ## Requirements
 
 - Node.js 18 or later (the backend uses the built-in `fetch` API)
 - npm
-- Docker Desktop on Windows/macOS or Docker Engine on Linux, running before code execution is used locally
+- Docker Desktop on Windows/macOS or Docker Engine on Linux, running on the executor host before code execution is used
 
-Docker is not needed for frontend-only development, but it is required for the current local code-execution implementation.
+Docker is not needed for frontend-only development, but it is required for the local executor.
 
 ## Run Locally
 
@@ -59,6 +62,7 @@ git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
 cd Codesimul
 npm install
 npm install --prefix backend
+npm install --prefix executor
 ```
 
 Build the execution image once:
@@ -66,6 +70,24 @@ Build the execution image once:
 ```bash
 docker build -t codesimul-runner:latest -f backend/Dockerfile.sandbox .
 ```
+
+### Start local services
+
+Set the same private token in both the executor and backend terminals. On PowerShell:
+
+```powershell
+# Terminal 1: executor
+cd executor
+$env:EXECUTOR_TOKEN = "codesimul-local-test-token"
+npm start
+
+# Terminal 2: backend, from the project root
+$env:EXECUTOR_URL = "http://localhost:5002"
+$env:EXECUTOR_TOKEN = "codesimul-local-test-token"
+npm start
+```
+
+The executor listens on <http://localhost:5002>; the backend remains at <http://localhost:5001>. The frontend continues to call only the backend.
 
 ### Serve a production-style local build
 
@@ -80,7 +102,7 @@ Open <http://localhost:5001>.
 
 ### Frontend-only development
 
-Run the backend in one terminal:
+Run the executor using the commands above, then run the backend in another terminal:
 
 ```bash
 npm start
@@ -92,7 +114,7 @@ Run the Create React App development server in another:
 npm run dev
 ```
 
-The development frontend runs on <http://localhost:3000> and uses the backend at <http://localhost:5001> by default. Docker must be running only when using Run Code or contest submission evaluation.
+The development frontend runs on <http://localhost:3000> and uses the backend at <http://localhost:5001> by default. Docker must be running only on the executor host when using Run Code or contest submission evaluation.
 
 ## Environment Variables
 
@@ -117,7 +139,8 @@ REACT_APP_BACKEND_URL=http://localhost:5001
 | `PORT` | Listener port. The server uses `process.env.PORT || 5001`. |
 | `NODE_ENV` | Enables production CORS behavior when set to `production`. |
 | `APP_ORIGIN` | Comma-separated allow-list of approved frontend origins for Express and Socket.IO CORS. |
-| `SANDBOX_IMAGE` | Optional Docker image override; defaults to `codesimul-runner:latest`. |
+| `EXECUTOR_URL` | Private base URL for the executor, such as `http://localhost:5002` locally. |
+| `EXECUTOR_TOKEN` | Long shared secret used only between the backend and executor. Never expose it to React. |
 
 For a production Vercel frontend, `APP_ORIGIN` must contain its exact HTTPS origin without a trailing slash, for example:
 
@@ -150,15 +173,17 @@ Configure the backend service with:
 ```env
 NODE_ENV=production
 APP_ORIGIN=https://your-project.vercel.app
+EXECUTOR_URL=https://executor.example.com
+EXECUTOR_TOKEN=replace-with-a-long-random-secret
 ```
 
-Use the actual Vercel production origin for `APP_ORIGIN`; list multiple permitted origins with commas if needed. Render provides `PORT`, so do not hard-code a Render port.
+Use the actual Vercel production origin for `APP_ORIGIN`; list multiple permitted origins with commas if needed. Render provides `PORT`, so do not hard-code a Render port. `EXECUTOR_URL` and `EXECUTOR_TOKEN` are backend-only Render environment variables.
 
-The repository does not include a Render configuration that supplies a Docker daemon. Standard Render Node hosting should therefore be treated as HTTP/Socket.IO hosting only unless the deployed production environment is separately verified to support the required Docker execution setup.
+The repository does not include a Render configuration that supplies a Docker daemon. Standard Render Node hosting is therefore used for HTTP and Socket.IO; deploy the executor to a separate Docker-capable host and keep its Docker daemon private.
 
 ## Code Execution
 
-The backend invokes Docker to run code in `codesimul-runner:latest`, built from `backend/Dockerfile.sandbox`. The image is based on `debian:bookworm-slim` and installs:
+The authenticated executor invokes Docker to run code in `codesimul-runner:latest`, built from `backend/Dockerfile.sandbox`. The image is based on `debian:bookworm-slim` and installs:
 
 - `g++` for C++ (`g++ -std=c++17 -O2`)
 - `python3` for Python
@@ -177,16 +202,16 @@ The backend starts each container with these restrictions:
 - dropped Linux capabilities and `no-new-privileges`
 - five-second program limit; normal Run Code requests have a 15-second outer execution limit
 
-Code and input are each limited to 50,000 characters. If Docker, the Docker daemon, or the image is unavailable, `POST /run` responds with `Execution service unavailable` (HTTP 503); the contest submission path reports the same execution-service error.
+Code and input are each limited to 50,000 characters. If the executor, Docker daemon, or runner image is unavailable, `POST /run` responds with `Execution service unavailable` (HTTP 503); the contest submission path reports the same execution-service error. Executor authentication failures are also treated as unavailable infrastructure and do not reveal internal details to the browser.
 
 ### Local and production execution
 
 ```text
-Local:       Node backend -> local Docker daemon -> sandbox container
-Production:  Node backend -> production execution environment
+Local:       Node backend -> local executor -> local Docker daemon -> sandbox container
+Production:  Render backend -> authenticated executor -> Docker daemon -> sandbox container
 ```
 
-The production execution environment must provide compatible Docker access or an equivalent replacement. A successfully deployed Render backend alone is not sufficient evidence that code execution can run there.
+The executor host must provide compatible Docker access. Do not expose the Docker socket or Docker TCP API; the executor exposes only authenticated execution endpoints plus its non-executing health check.
 
 ## Contest Flow
 
@@ -217,6 +242,9 @@ npm install --prefix backend
 # Start the backend (serves build/ when it exists)
 npm start
 
+# Start the executor from its directory (requires EXECUTOR_TOKEN)
+cd executor && npm start
+
 # Start the React development server
 npm run dev
 
@@ -228,6 +256,9 @@ npm test
 
 # Check backend syntax
 node --check backend/index.js
+
+# Check executor syntax
+npm run check --prefix executor
 
 # Build and inspect the local Docker sandbox image
 docker build -t codesimul-runner:latest -f backend/Dockerfile.sandbox .
@@ -280,4 +311,4 @@ The backend package also has an `npm start` script when run from `backend/`. Its
 
 ## Project Status
 
-The repository implements collaborative rooms, real-time editor/language/whiteboard events, Codeforces metadata loading, and in-memory timed contests. The Vercel frontend and Render HTTP/Socket.IO backend are configured to communicate through the Render URL and CORS allow-list. Code execution works locally with Docker; production execution requires a separately verified Docker-capable or equivalent execution environment and is not guaranteed by a standard Render Node service.
+The repository implements collaborative rooms, real-time editor/language/whiteboard events, Codeforces metadata loading, and in-memory timed contests. The Vercel frontend and Render HTTP/Socket.IO backend communicate through the Render URL and CORS allow-list. Code execution is delegated to an authenticated Docker executor; deployment of that executor remains a separate step.

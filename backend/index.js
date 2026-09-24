@@ -1,10 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const { spawn } = require("child_process");
 const fs = require("fs");
-const fsp = require("fs/promises");
-const os = require("os");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -14,10 +11,9 @@ const rateLimit = require("express-rate-limit");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
-// Build backend/Dockerfile.sandbox once before starting the backend. It keeps
-// all supported language runtimes in the same locked-down execution image.
-const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || "codesimul-runner:latest";
-const RUN_TIMEOUT_MS = 5000;
+const EXECUTOR_URL = (process.env.EXECUTOR_URL || "").replace(/\/$/, "");
+const EXECUTOR_TOKEN = process.env.EXECUTOR_TOKEN || "";
+const EXECUTOR_REQUEST_TIMEOUT_MS = 35_000;
 const MAX_CODE_LENGTH = 50000;
 const MAX_INPUT_LENGTH = 50000;
 const MAX_SOCKET_CODE_LENGTH = 100000;
@@ -147,36 +143,40 @@ function validateSubmission(code, language) {
   return null;
 }
 
-async function prepareSubmission(tempDir, code, input, language) {
-  const config = getLanguageConfig(language);
-  await Promise.all([
-    fsp.writeFile(path.join(tempDir, config.filename), code),
-    fsp.writeFile(path.join(tempDir, "input.txt"), `${typeof input === "string" ? input : ""}\n`),
-  ]);
-  return config;
-}
+class ExecutorUnavailableError extends Error {}
+class ExecutorRequestError extends Error {}
 
-function buildBatchScript(config, testCaseCount) {
-  const lines = ["#!/bin/sh", "set +e", `${config.compile} > compile.stdout 2> compile.stderr`, "if [ $? -ne 0 ]; then exit 20; fi"];
-  for (let index = 0; index < testCaseCount; index += 1) {
-    lines.push(
-      `started=$(date +%s%3N)`,
-      `timeout 5s ${config.run} < input_${index}.txt > actual_${index}.txt 2> stderr_${index}.txt`,
-      "status=$?",
-      "finished=$(date +%s%3N)",
-      `printf '%s\n%s\n' \"$status\" \"$((finished-started))\" > result_${index}.meta`
-    );
+async function requestExecutor(endpoint, payload) {
+  if (!EXECUTOR_URL || !EXECUTOR_TOKEN) throw new ExecutorUnavailableError();
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXECUTOR_REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${EXECUTOR_URL}${endpoint}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${EXECUTOR_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch {
+    throw new ExecutorUnavailableError();
+  } finally {
+    clearTimeout(timeout);
   }
-  lines.push("exit 0");
-  return lines.join("\n");
-}
 
-async function readFileOrEmpty(filePath) {
-  try { return await fsp.readFile(filePath, "utf8"); } catch { return ""; }
-}
-
-function comparableOutput(value) {
-  return value.replace(/\r\n/g, "\n").trimEnd();
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new ExecutorUnavailableError();
+  }
+  if (response.status === 400) throw new ExecutorRequestError();
+  if (!response.ok) throw new ExecutorUnavailableError();
+  return data;
 }
 
 function contestState(room) {
@@ -197,79 +197,7 @@ function endExpiredContest(room, roomId) {
 async function executeTestCases({ code, language, testCases }) {
   const validationError = validateSubmission(code, language);
   if (validationError) return { error: validationError };
-  const config = getLanguageConfig(language);
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "codesimul-tests-"));
-  const containerName = `codesimul-tests-${crypto.randomUUID()}`;
-  try {
-    await fsp.writeFile(path.join(tempDir, config.filename), code);
-    await Promise.all(testCases.map((testCase, index) => fsp.writeFile(path.join(tempDir, `input_${index}.txt`), `${testCase.input}\n`)));
-    await fsp.writeFile(path.join(tempDir, "run-tests.sh"), buildBatchScript(config, testCases.length));
-    const sandboxResult = await runSandbox(tempDir, containerName, "sh run-tests.sh", 30_000);
-    const compileError = await readFileOrEmpty(path.join(tempDir, "compile.stderr"));
-    if (compileError || sandboxResult.status === 20) return { error: `Compilation failed:\n${compileError || sandboxResult.output}` };
-    const results = await Promise.all(testCases.map(async (testCase, index) => {
-      const [actualOutput, stderr, meta] = await Promise.all([
-        readFileOrEmpty(path.join(tempDir, `actual_${index}.txt`)),
-        readFileOrEmpty(path.join(tempDir, `stderr_${index}.txt`)),
-        readFileOrEmpty(path.join(tempDir, `result_${index}.meta`)),
-      ]);
-      const [statusText = sandboxResult.timedOut ? "124" : "1", timeText = "0"] = meta.trim().split("\n");
-      const status = Number(statusText);
-      return {
-        input: testCase.input,
-        expectedOutput: testCase.expectedOutput,
-        actualOutput,
-        passed: status === 0 && comparableOutput(actualOutput) === comparableOutput(testCase.expectedOutput),
-        timeMs: Number(timeText) || 0,
-        error: status === 124 ? "Execution timed out" : (status !== 0 ? (stderr || "Runtime error") : undefined),
-      };
-    }));
-    return { results };
-  } finally {
-    spawn("docker", ["rm", "-f", containerName], { windowsHide: true }).on("error", () => {});
-    await fsp.rm(tempDir, { recursive: true, force: true });
-  }
-}
-
-function runSandbox(tempDir, containerName, command, timeoutMs = RUN_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    const args = [
-      "run", "--rm", "--name", containerName,
-      "--network", "none", "--read-only",
-      "--memory", "256m", "--memory-swap", "256m", "--cpus", "0.5", "--pids-limit", "64",
-      "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-      "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m",
-      "--mount", `type=bind,src=${tempDir},dst=/work,bind-propagation=rprivate`,
-      "--workdir", "/work", SANDBOX_IMAGE,
-      "sh", "-c", command,
-    ];
-    const child = spawn("docker", args, { windowsHide: true });
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let started = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      // Kill by name so Docker also terminates all processes in the container.
-      spawn("docker", ["kill", containerName], { windowsHide: true }).on("error", () => {});
-    }, timeoutMs);
-
-    child.stdout.on("data", (data) => { stdout += data.toString(); });
-    child.stderr.on("data", (data) => { stderr += data.toString(); });
-    child.on("spawn", () => { started = true; });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject({ type: "service", error });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (!started) return;
-      if (timedOut) return resolve({ output: "Execution timed out", status: 124, timedOut: true });
-      // Docker reserves exit code 125 for daemon/image/container startup errors.
-      if (code === 125) return reject({ type: "service", error: new Error(stderr || "Docker failed to start the sandbox") });
-      resolve({ output: code === 0 ? stdout : (stderr || "Execution failed"), status: code, timedOut: false });
-    });
-  });
+  return requestExecutor("/execute-tests", { code, language, testCases });
 }
 
 app.get("/api/health", (req, res) => res.send("Backend is running"));
@@ -284,22 +212,20 @@ app.post("/run", runLimiter, async (req, res) => {
     return res.status(413).json({ output: "Code or input too large" });
   }
 
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "codesimul-run-"));
-  const containerName = `codesimul-${crypto.randomUUID()}`;
   try {
-    await prepareSubmission(tempDir, code, input, language);
-    // Compilation may take longer on a cold Java/C++ image. The user program
-    // itself remains limited to five seconds; the outer cap also bounds setup.
-    const result = await runSandbox(tempDir, containerName, `${config.compile} && timeout 5s ${config.run} < input.txt`, 15_000);
-    if (result.status === 124 || result.timedOut) return res.json({ output: "Execution timed out" });
-    return res.json({ output: result.output });
+    const result = await requestExecutor("/execute", {
+      code,
+      input: typeof input === "string" ? input : "",
+      language,
+    });
+    if (result.status === 124 || result.timedOut) {
+      return res.json({ output: "Execution timed out", timedOut: true });
+    }
+    return res.json({ output: result.output || "No output", timedOut: false });
   } catch (error) {
-    console.error("Sandbox execution failed:", error.error?.message || error.message);
+    if (error instanceof ExecutorRequestError) return res.status(400).json({ output: "Invalid execution request" });
+    console.error("Executor request failed");
     return res.status(503).json({ output: "Execution service unavailable" });
-  } finally {
-    // Safe even when Docker already removed the container; prevents stragglers after a failed start.
-    spawn("docker", ["rm", "-f", containerName], { windowsHide: true }).on("error", () => {});
-    await fsp.rm(tempDir, { recursive: true, force: true });
   }
 });
 
