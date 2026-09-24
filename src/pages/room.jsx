@@ -861,16 +861,19 @@ function Room() {
             }
           );
 
-        const data =
-          await res.json();
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.output || `Backend request failed (${res.status})`);
+        }
 
         setOutput(
           data.output ||
           "No output"
         );
-      } catch {
+      } catch (error) {
         setOutput(
-          "Error connecting to backend"
+          error.message || "Error connecting to backend"
         );
       }
     };

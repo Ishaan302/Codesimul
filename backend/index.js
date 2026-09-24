@@ -42,12 +42,29 @@ const testRunLimiter = rateLimit({
   message: { error: "Too many test runs — please wait a moment and try again." },
 });
 
-const appOrigin = process.env.APP_ORIGIN;
+// APP_ORIGIN is a comma-separated allow-list of the deployed frontend URLs.
+// A production browser request must have one of these origins; without it,
+// CORS correctly rejects the request instead of accepting every website.
+const configuredOrigins = (process.env.APP_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+const localOrigins = ["http://localhost:3000", "http://localhost:3001"];
 const allowedOrigins = process.env.NODE_ENV === "production"
-  ? appOrigin
-    ? appOrigin.split(",").map((origin) => origin.trim()).filter(Boolean)
-    : []
-  : ["http://localhost:3000", "http://localhost:3001"];
+  ? configuredOrigins
+  : [...new Set([...localOrigins, ...configuredOrigins])];
+const corsOptions = {
+  origin(origin, callback) {
+    // Requests without an Origin header (health checks, server-to-server calls)
+    // do not need browser CORS permission.
+    callback(null, !origin || allowedOrigins.includes(origin));
+  },
+  methods: ["GET", "POST"],
+};
+
+if (process.env.NODE_ENV === "production" && allowedOrigins.length === 0) {
+  console.warn("APP_ORIGIN is not set; browser requests will be rejected by CORS.");
+}
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -64,7 +81,7 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "100kb" }));
 app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && "body" in error) {
@@ -311,7 +328,7 @@ app.get("/cf/meta", async (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   maxHttpBufferSize: 1e6,
-  cors: { origin: allowedOrigins, methods: ["GET", "POST"] },
+  cors: corsOptions,
   transports: ["websocket", "polling"],
 });
 
